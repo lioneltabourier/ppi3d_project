@@ -1,0 +1,227 @@
+\documentclass{article}
+
+% Language setting
+% Replace `english' with e.g. `spanish' to change the document language
+\usepackage[english]{babel}
+
+% Set page size and margins
+% Replace `letterpaper' with `a4paper' for UK/EU standard size
+\usepackage[letterpaper,top=2cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+
+% Useful packages
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+\graphicspath{{./images/}}
+
+\newcommand{\mytodo}{ \begin{center} \textcolor{red}{[TODO]} \end{center}}
+
+
+
+%%%%%%%%%%%%%
+
+\title{Working document:\\
+structural link prediction using PPI3D dataset}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+%\begin{abstract}
+%Your abstract.
+%\end{abstract}
+
+%%%%%%%%%%%%%
+
+\section{Data and preprocessing}
+
+Starting from dataset \texttt{clustering95/human\_9606/filtered\_human\_area\_less12000.csv}
+
+\subsection{Preprocessing}
+
+\begin{itemize}
+    \item the edges considered are limited to protein-protein interactions (exclude protein-peptide)
+    \item we exclude \texttt{homo} edges (from the protein to itself)
+    \item we consider that \texttt{s1\_seq\_cluster\_95} can be used as a proxy to identify a given protein
+\end{itemize}
+
+\subsection{Characteristics of the PPI network}
+
+$n= 10,077$ proteins,  $ m= 12,957 $ distinct interactions 
+%
+$ \Rightarrow  $ average degree $ \overline{d} = \frac{2m}{n} \simeq 2.57 $
+%
+and density $ \delta = \frac{2m}{n(n-1)} \simeq 2.55 \times 10^{-4}$
+
+\medskip
+
+For comparison:
+%
+\begin{itemize}
+    \item[-] \texttt{STRING} (confidence $\geq 900$): $n= 6,743$,  $ m= 67,730$
+    %
+    \item[-]  \texttt{Heine et al.} $n= 5,457$,  $ m=28,779 $
+    %
+    \item[-]  \texttt{Lit-bm-13} $n= 3,391$,  $ m= 4,905 $
+    %
+    \item[-]  \texttt{Lit-nb-13} $n= 5,545$,  $ m= 11,044 $
+\end{itemize}
+
+
+%%%%%%%%%%%%%
+
+\section{Basic predictions on the PPI dataset}
+
+We implement basic predictors: \texttt{L3} and variants, and \texttt{Adamic-Adar} for comparison in an unsupervised way to the data. 
+%
+The related Figure is~\ref{fig:res-ppi}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.45\linewidth]{ppi3d_c95_human_net_75-25.pdf}
+    \includegraphics[width=0.45\linewidth]{ppi3d_c95_human_net_50-50.pdf}
+    \caption{Left: data split (train/test) is 75-25; right is 50-50 (Yuen data split).}
+    \label{fig:res-ppi}
+\end{figure}
+
+\medskip
+
+Comments:
+\begin{itemize}
+    \item the performances are not quite similar to what we find on other relatively small datasets (\texttt{Heine et al.}, \texttt{Lit-bm-13}, \texttt{Lit-nb-13}), see~\cite{yuen2023normalized}: L3 and variants are less efficient than usual, especially at larger recall 
+    $ \Rightarrow $ we may have performance improvement when stacking
+\end{itemize}
+%
+\mytodo
+
+%%%%%%%%%%%%%
+
+\section{Making a binding-site network}
+
+Based on the idea that the jigsaw puzzle hypothesis should work better at the scale of the binding site, we transform the network into a binding site network (BSN).
+%
+For this purpose we use \texttt{s1\_binding\_site\_cluster\_95} as the identifier of the nodes.
+
+\medskip
+
+Characteristics of the BSN:  
+%
+$n= 28,945$ distinct binding sites,  $ m= 17,714 $ interactions 
+%
+$ \Rightarrow  $ average degree $ \overline{d} = \frac{2m}{n} \simeq 1.23 $
+%
+and density $ \delta = \frac{2m}{n(n-1)} \simeq 4.23 \times 10^{-5}$.
+%
+It is thus very sparse, making prediction on it is hardly doable.
+
+Justas suggests to use a lower binding site similarity cluster (70 or 40), which would make it denser.
+%
+\mytodo
+
+%%%%%%%%%%%%%
+
+\section{Adding biology to the L3-prediction}
+
+\subsection{Testing the jigsaw puzzle assumption}
+
+According to the puzzle assumption, if we observe the following edges:
+\texttt{x-u}, \texttt{u-v}, \texttt{v-y}, then \texttt{y-x} should be present in the network.
+%
+In other words, if we see a path-3 pattern in the network, we should observe that this path is closed in a length 4 cycle.
+
+We measure in the PPI network how frequent this pattern actually is.
+%
+We count 147,727 path-3 patterns and 19,557 cycles of length 4.
+%
+As there are 4 such paths per cycle, we can count a normalized ratio (let's call it 4-transitivity), which is the probability for a 3-path to be completed in a 4 cycle in the dataset:
+
+$$ \frac{4.\square}{\sqcap} = 0.530 $$
+
+For comparison, if edges were totally random, then it should be equal to the density $ \delta \simeq 2.55 \times 10^{-4}$.
+%
+This is thus very high.
+
+We can try to define a transitivity-based prediction to see if it can challenge L3 performances.
+%
+\mytodo
+
+Also, when listing theses squares, we observe many structure like this:\\
+%
+\texttt{
+85339 85346 85340 85351\\
+85339 85346 85348 85351\\
+85340 85346 85348 85351\\
+etc.\\}
+%
+which seems to indicate that many cycles are part of a larger structure, which would appear as a larger quasi-clique.
+%
+It led to the assumption in subsection~\ref{subsection:superstructure}.
+
+
+\subsection{Nature of the edges predicted by L3: superstructures?}
+\label{subsection:superstructure}
+
+Based on this naked-eye observation, Justas suggested that  the 4 edges cyclic structures are actually part of the same ``superstructure''.
+
+Direct test: we measure if the edges \texttt{y-x} are actually part of the same superstructure.
+
+In most case, we can assume that the interactions share the same pdb identifier \texttt{pdbid}.
+%
+We measure in the dataset if it is indeed the case in the cycles formerly enumerated.
+%
+I did that for the 19,557 cycles, and I find:
+%
+\begin{itemize}
+    \item 2,708 cycles where all \texttt{pdbid} are identical (of the form \texttt{9cwt 9cwt 9cwt 9cwt})
+    \item 6,574 cycles where there are 2 different \texttt{pdbid} (of the form \texttt{9cq4 9cq4 8za6 8za6})
+    \item 6,535 cycles where there are 3 different \texttt{pdbid} (of the form \texttt{9cn3 3j7y 7o9m 7o9m})
+    \item 3,740 cycles where all \texttt{pdbid} are different (of the form \texttt{7w3m 9m2w 8usb 9e8o})
+\end{itemize}
+
+In my opinion, it rather goes in the sense of Justas' assumption that in most cases, we have superstructures containing 4-cycles and that's what L3 would mostly predict.
+
+
+Also, it is an underestimate because the database is made in a way that might lead to a different  \texttt{pdbid} even if the interactions are involved in the same structure.
+%
+The reason is that the  \texttt{pdbid} selected is the ``best'' one, and if the PPI is involved in several structures, it might not be the one corresponding to the superstructure that we are looking for.
+%
+I should go back to the original dataset to look for the different \texttt{pdbid} involving the edges. 
+%
+\mytodo
+
+
+\subsection{Nature of the edges predicted by L3: interactions involving unstructured parts of the proteins?}
+
+Another possibility could be that the edges predicted by L3 correspond to interactions involving unstructured parts of the protein.
+
+One possibility could be to use AlphaFold to give an estimate of the fraction of the protein that is unstructured to see if it is the case.
+
+I don't know how to address that precisely for the moment.
+%
+\mytodo
+
+\section{Complementarity measures and L3 prediction}
+
+I want to know if the L3 predicted edges (or any measure predicted edges actually) correspond to more complementary proteins.
+
+This suppose to define some notion of complementarity, itself based on the notion of similarity.
+%
+We could use 
+\texttt{s1\_seq\_cluster\_70} or \texttt{s1\_seq\_cluster\_40} as an intermediate to compute the notion of similarity between proteins.
+
+
+For the moment I did not really address this topic.
+%
+\mytodo
+
+%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%
+
+\bibliographystyle{alpha}
+\bibliography{sample}
+
+\end{document}
